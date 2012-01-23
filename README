@@ -1,0 +1,13 @@
+- TCPServer_For_Softimage - Addon -
+
+- Installation -
+Extract and Install like an usual Softimage Addon: Softimage -> File - > Addon -> Install Addon.
+
+- Usage -
+TCPServer_For_Softimage menu entry is stored in Model -> Get -> Primitive -> Light. "TCPServer_For_Softimage Properties" launches the TCPServer_For_Softimage property.
+
+- About -
+TCPServer_For_Softimage by Thomas Mansencal - 2012
+Copyright (C) 2012 - Thomas Mansencal - thomas.mansencal@gmail.com
+This software is released under terms of GNU GPL V3 license: http://www.gnu.org/licenses/
+http://www.thomasmansencal.com/
