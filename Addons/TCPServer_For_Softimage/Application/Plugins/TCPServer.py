@@ -20,17 +20,17 @@ it's written in **Python**.
 	resulting in application getting blocked while the code is executed.
 	| To prevent this the :class:`TCPServer`class code is executed in a separate thread using the 
 	:mod:`SocketServer`.
-	| One of the major issue I encountered while implementing the server was that the client code was getting executed
+	| One of the major issue encountered while implementing the server was that the client code was getting executed
 	into the server thread resulting in random application crashes.
 	| The trick to avoid this has been to create a global requests stack using :class:`collections.deque` class shared
-	between the main application thread and the server thread, then a timer event call on a regular interval
-	a data processing object.
-	| Another major issue I faced was the scopes oddities happening with code and especially the PPG logic. It's
-	certainly related to my lack of deep knowledge of **Autodesk Softimage** API. It seems that the PPG logic definitions
-	are called in another scope than the module one. Hopefully, thanks to **Python** introspection it's possible to
-	retrieve the correct module object. For that I defined a global :data:`__uid__` attribute, then I traverse the list of
-	objects handled by the garbage collector until I found one with my attribute. See :def:`_getTCPServerObject` definition
-	for more details.
+	between the main application thread and the server thread, then a timer event process the data on a regular interval.
+	| Another issue was the scopes oddities happening with the code and especially the PPG logic. It seems that
+	the PPG logic definitions are called in another scope than the module one.
+	| Hopefully, thanks to **Python** introspection it's possible to retrieve the correct module object. For that,
+	a global :data:`__uid__` attribute is defined, then the list of objects handled by the garbage collector is traversed
+	until one with the attribute is found. See :def:`_getModule` definition for more details.
+	| An alternate design using the plugin **UserData** attribute has been tested but never managed to wrap correcly
+	the :class:`collections.deque` class inside a COM object.
 
 **Usage:**
 
@@ -38,8 +38,12 @@ it's written in **Python**.
 	**TCPServer_For_Softimage**.
 	| The server should start automatically with **Autodesk Softimage** startup. You can also start it using the
 	**TCPServer_start** command or the **TCPServer_property**.
-	| By default the server is handling string packets of *1024* in size, if the packets are bigger they are split and
-	stacked. They are processed by the :def:`_processData` definition, it handles two type of string formatting:
+	| By default the server is handling string packets of *4096* in size, if the packets are bigger they are split and
+	stacked. They are processed by the \*RequestHandlers.processData methods.
+
+**Handlers:**
+	| Different handlers are available as examples:
+	| The :class:`DefaultStackDataRequestHandler` class handles two types of string formatting:
 
 		- An existing script file path: "C://MyScript//PythonScript.py" in that case the script would be executed as
 		a **Python** script by the application.
@@ -99,34 +103,105 @@ class AbstractServerError(Exception):
 class ServerOperationError(AbstractServerError):
 	pass
 
-class DefaultRequestHandler(SocketServer.BaseRequestHandler):
+class NetworkMessages():
+	dataReceived = "@DATA_RECEIVED"
+	requestEnd = "@REQUEST_END"
+
+class DefaultRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
 		while True:
-			data = self.request.recv(1024)
-			if len(data) == 0:
+			data = self.request.recv(4096)
+			if not data:
 				break
+			
+			self.request.send(self.dataReceived)
 			sys.stdout.write(data)
 		return True
 
-class LoggingRequestHandler(SocketServer.BaseRequestHandler):
+	@staticmethod
+	def processData():
+		pass
+
+class LoggingRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
 		while True:
-			data = self.request.recv(1024)
-			if len(data) == 0:
+			data = self.request.recv(4096)
+			if not data:
 				break
-			Application.LogMessage(data)
+			
+			self.request.send(self.dataReceived)
+			Runtime.requestsStack.append(data)
 		return True
 
-class StackDataRequestHandler(SocketServer.BaseRequestHandler):
+	@staticmethod
+	def processData():
+		while Runtime.requestsStack:
+			Application.LogMessage(Runtime.requestsStack.popleft())
+		return True
+
+class DefaultStackDataRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
 		while True:
-			data = self.request.recv(1024)
-			if len(data) == 0:
+			data = self.request.recv(4096)
+			if not data:
 				break
-			RuntimeGlobals.requestsStack.append(data)
+			
+			self.request.send(self.dataReceived)
+			Runtime.requestsStack.append(data)
+		return True
+
+	@staticmethod
+	def processData():
+		while Runtime.requestsStack:
+			data = Runtime.requestsStack.popleft().strip()
+			if os.path.exists(data):
+				value = Application.ExecuteScript(data)
+				Application.LogMessage("{0} | Request return value: '{1}'.".format(
+				Constants.name, value), siConstants.siVerbose)
+			else:
+				for language in Constants.languages:
+					match = re.match(r"\s*(?P<language>{0})\s*\|(?P<code>.*)".format(language), data)
+					if match:
+						value = Application.ExecuteScriptCode(match.group("code"), match.group("language"))
+						Application.LogMessage("{0} | Request return value: '{1}'.".format(
+						Constants.name, value), siConstants.siVerbose)
+						break
+		return True
+
+class PythonStackDataRequestHandler(SocketServer.BaseRequestHandler):
+
+	def handle(self):
+		allData = []
+		while True:
+			data = self.request.recv(4096)
+			if not data:
+				break
+			
+			self.request.send(self.dataReceived)
+			if self.requestEnd in data:
+				allData.append(data[:data.find(self.requestEnd)])
+				break
+
+			allData.append(data)
+			if len(allData) >=1:
+				tail = allData[-2] + allData[-1]
+				if self.requestEnd in tail:
+					allData[-2] = tail[:tail.find(self.requestEnd)]
+					allData.pop()
+					break
+
+		Runtime.requestsStack.append("".join(allData))
+		return True
+
+	@staticmethod
+	def processData():
+		while Runtime.requestsStack:
+			value = Application.ExecuteScriptCode(Runtime.requestsStack.popleft(), "Python")
+			Application.LogMessage("{0} | Request return value: '{1}'.".format(
+			Constants.name, value), siConstants.siVerbose)
 		return True
 
 class Constants(object):
@@ -138,12 +213,14 @@ class Constants(object):
 	majorVersion = 1
 	minorVersion = 0
 	patchVersion = 0
+	settings = "TCPServer_settings_property"
+	logo = "pictures/TCPServer_Logo.bmp"
 	defaultAddress = "127.0.0.1"
 	defaultPort = 12288
-	defaultRequestsHandler = StackDataRequestHandler
+	defaultRequestsHandler = DefaultStackDataRequestHandler
 	languages = ("VBScript", "JScript", "Python", "PythonScript", "PerlScript")
 
-class RuntimeGlobals(object):
+class Runtime(object):
 
 	server = None
 	address = Constants.defaultAddress
@@ -273,6 +350,14 @@ def XSIUnloadPlugin(pluginRegistrar):
 	Application.LogMessage("'{0}' has been unloaded!".format(pluginRegistrar.Name))
 	return True
 
+def TCPServer_startupEvent_OnEvent(context):
+	Application.LogMessage("{0} | 'TCPServer_startupEvent_OnEvent' called!".format(
+	Constants.name), siConstants.siVerbose)
+	_registerSettingsProperty()
+	_restoreSettings()
+	_startServer()
+	return True
+
 def TCPServer_start_Init(context):
 	Application.LogMessage("{0} | 'TCPServer_start_Init' called!".format(
 	Constants.name), siConstants.siVerbose)
@@ -295,27 +380,26 @@ def TCPServer_stop_Execute():
 	_stopServer()
 	return True
 
-def TCPServer_startupEvent_OnEvent(context):
-	Application.LogMessage("{0} | 'TCPServer_startupEvent_OnEvent' called!".format(
-	Constants.name), siConstants.siVerbose)
-	_startServer()
-	return True
-
 def TCPServer_timerEvent_OnEvent(context):
 	# Application.LogMessage("{0} | 'TCPServer_timerEvent' called!".format(
 	# Constants.name), siConstants.siVerbose)
-	_processData()
+	Runtime.requestsHandler.processData()
 	return False
 
 def TCPServer_property_Define(context):
 	property = context.Source
-	property.AddParameter2("Address_siString", siConstants.siString, Constants.defaultAddress)
-	property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.defaultPort, 10000, 65536, 10000, 65536)
+	property.AddParameter2("Logo_siString", siConstants.siString)
+	property.AddParameter2("Address_siString", siConstants.siString, Runtime.address)
+	property.AddParameter2("Port_siInt", siConstants.siInt4, Runtime.port, 10000, 65536, 10000, 65536)
 	return True
 
 def TCPServer_property_DefineLayout(context):
 	layout = context.Source
 	layout.Clear()
+
+	Logo_siControlBitmap = layout.AddItem("Logo_siString", "", siConstants.siControlBitmap)
+	Logo_siControlBitmap.SetAttribute(siConstants.siUIFilePath, os.path.join(__sipath__, Constants.logo))
+	Logo_siControlBitmap.SetAttribute(siConstants.siUINoLabel, True)
 
 	layout.AddGroup("Server", True, 0)
 
@@ -336,74 +420,84 @@ def TCPServer_property_DefineLayout(context):
 	return True
 
 def TCPServer_property_Address_siString_OnChanged():
-	RuntimeGlobals.address = PPG.Address_siString.Value
-	return True 
+	module = _getModule()
+	if not module:
+		return
+
+	module.Runtime.address = PPG.Address_siString.Value
+	module._storeSettings()
+	return True
 
 def TCPServer_property_Port_siInt_OnChanged():
-	RuntimeGlobals.port = PPG.Port_siInt.Value
-	return True 
+	module = _getModule()
+	if not module:
+		return
+
+	module.Runtime.port = PPG.Port_siInt.Value
+	module._storeSettings()
+	return True
 
 def TCPServer_property_Start_Server_button_OnClicked():
-	tcpServer = _getTCPServerObject()
-	if not tcpServer:
+	module = _getModule()
+	if not module:
 		return
 
-	tcpServer._startServer()
-	return True 
+	module._startServer()
+	return True
 
 def TCPServer_property_Stop_Server_button_OnClicked():
-	tcpServer = _getTCPServerObject()
-	if not tcpServer:
+	module = _getModule()
+	if not module:
 		return
 
-	tcpServer._stopServer()
+	module._stopServer()
+	return True
+
+def _registerSettingsProperty():
+	if not Application.Preferences.Categories(Constants.settings):
+		property = Application.ActiveSceneRoot.AddCustomProperty(Constants.settings);
+		property.AddParameter2("Address_siString", siConstants.siString, Constants.defaultAddress)
+		property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.defaultPort, 10000, 65536, 10000, 65536)
+		Application.InstallCustomPreferences("TCPServer_settings_property", "TCPServer_settings_property")
 	return True 
 
-# def initializeSettings():
-# 	if not Application.Preferences.Categories("TCPServer_settings_property":
-# 		property = ActiveSceneRoot.AddCustomProperty("TCPServer_settings_property", false);
-# 	property.AddParameter2("Address_siString", siConstants.siString, Constants.defaultAddress)
-# 	property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.defaultPort, 10000, 65536, 10000, 65536)
-# 		InstallCustomPreferences("sIBL_GUI_For_XSI_Settings", "sIBL_GUI_For_XSI_Settings");
+def _storeSettings():
+	if Application.Preferences.Categories(Constants.settings):
+		Application.preferences.SetPreferenceValue("{0}.Address_siString".format(Constants.settings), Runtime.address)
+		Application.preferences.SetPreferenceValue("{0}.Port_siInt".format(Constants.settings), Runtime.port)
+	return True 
+
+def _restoreSettings():
+	if Application.Preferences.Categories(Constants.settings):
+		Runtime.address = str(Application.preferences.GetPreferenceValue("{0}.Address_siString".format(Constants.settings)))
+		Runtime.port = int(Application.preferences.GetPreferenceValue("{0}.Port_siInt".format(Constants.settings)))
+	return True 
 
 def _getServer(address, port, requestsHandler):
 	return TCPServer(address, port, requestsHandler)
 
 def _startServer():
-	if RuntimeGlobals.server:
-		if RuntimeGlobals.server.online:
-			raise ServerOperationError("{0} | '{1}' server is already online!".format(Constants.name, RuntimeGlobals.server))
+	if Runtime.server:
+		if Runtime.server.online:
+			XSIUIToolkit.Msgbox("{0} | The server is already online!".format(Constants.name, Runtime.server),
+								siConstants.siMsgExclamation, "{0} | Warning".format(Constants.name))
+			return
 
-	RuntimeGlobals.server = _getServer(RuntimeGlobals.address, RuntimeGlobals.port, RuntimeGlobals.requestsHandler)
-	RuntimeGlobals.server.start()
+	Runtime.server = _getServer(Runtime.address, Runtime.port, Runtime.requestsHandler)
+	Runtime.server.start()
 	return True
 
 def _stopServer():
-	if RuntimeGlobals.server:
-		if not RuntimeGlobals.server.online:
-			raise ServerOperationError("{0} | '{1}' server is not online!".format(Constants.name, RuntimeGlobals.server))
+	if Runtime.server:
+		if not Runtime.server.online:
+			XSIUIToolkit.Msgbox("{0} | The server is not online!".format(Constants.name, Runtime.server),
+								siConstants.siMsgExclamation, "{0} | Warning".format(Constants.name))
+			return
 
-	RuntimeGlobals.server and RuntimeGlobals.server.stop()
-	return True 
-
-def _processData():
-	while RuntimeGlobals.requestsStack:
-		data = RuntimeGlobals.requestsStack.popleft().strip()
-		if os.path.exists(data):
-			value = Application.ExecuteScript(data)
-			Application.LogMessage("{0} | Request return value: '{1}'.".format(
-			Constants.name, value), siConstants.siVerbose)
-		else:
-			for language in Constants.languages:
-				match = re.match(r"\s*(?P<language>{0})\s*\|(?P<code>.*)".format(language), data)
-				if match:
-					value = Application.ExecuteScriptCode(match.group("code"), match.group("language"))
-					Application.LogMessage("{0} | Request return value: '{1}'.".format(
-					Constants.name, value), siConstants.siVerbose)
-					break
+	Runtime.server and Runtime.server.stop()
 	return True
 
-def _getTCPServerObject():
+def _getModule():
 	# Garbage Collector wizardry to retrieve the actual module object.
 	import gc
 	for object in gc.get_objects():
