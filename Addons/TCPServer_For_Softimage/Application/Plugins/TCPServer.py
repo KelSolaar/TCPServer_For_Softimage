@@ -39,11 +39,11 @@ it's written in **Python**.
 	| The server should start automatically with **Autodesk Softimage** startup. You can also start it using the
 	**TCPServer_start** command or the **TCPServer_property**.
 	| By default the server is handling string packets of *4096* in size, if the packets are bigger they are split and
-	stacked. They are processed by the \*RequestHandlers.processData methods.
+	stacked. They are processed by the \*RequestsHandlers.processData methods.
 
 **Handlers:**
 	| Different handlers are available as examples:
-	| The :class:`DefaultStackDataRequestHandler` class handles two types of string formatting:
+	| The :class:`DefaultStackDataRequestsHandler` class handles two types of string formatting:
 
 		- An existing script file path: "C://MyScript//PythonScript.py" in that case the script would be executed as
 		a **Python** script by the application.
@@ -71,9 +71,12 @@ it's written in **Python**.
 #**********************************************************************************************************************
 import SocketServer
 import collections
+import inspect
 import os
 import re
+import socket
 import sys
+import itertools
 import threading
 from win32com.client import constants as siConstants
 
@@ -104,35 +107,49 @@ class ServerOperationError(AbstractServerError):
 	pass
 
 class NetworkMessages():
-	dataReceived = "@DATA_RECEIVED"
-	requestEnd = "@REQUEST_END"
+	dataReceived = "<<!DR>>"
+	requestEnd = "<<!RE>>"
 
-class DefaultRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class DefaultRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
-		while True:
-			data = self.request.recv(4096)
-			if not data:
-				break
+		try:
+			while True:
+				data = self.request.recv(4096)
+				if not data:
+					break
 			
+				sys.stdout.write(data)
 			self.request.send(self.dataReceived)
-			sys.stdout.write(data)
+		except socket.error as error:
+			if error.errno == 10054:
+				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
+				Constants.name), siConstants.siWarning)
+			else:
+				raise error
 		return True
 
 	@staticmethod
 	def processData():
 		pass
 
-class LoggingRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class LoggingRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
-		while True:
-			data = self.request.recv(4096)
-			if not data:
-				break
+		try:
+			while True:
+				data = self.request.recv(4096)
+				if not data:
+					break
 			
+				Runtime.requestsStack.append(data)
 			self.request.send(self.dataReceived)
-			Runtime.requestsStack.append(data)
+		except socket.error as error:
+			if error.errno == 10054:
+				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
+				Constants.name), siConstants.siWarning)
+			else:
+				raise error
 		return True
 
 	@staticmethod
@@ -141,16 +158,23 @@ class LoggingRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 			Application.LogMessage(Runtime.requestsStack.popleft())
 		return True
 
-class DefaultStackDataRequestHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
-		while True:
-			data = self.request.recv(4096)
-			if not data:
-				break
+		try:
+			while True:
+				data = self.request.recv(4096)
+				if not data:
+					break
 			
+				Runtime.requestsStack.append(data)
 			self.request.send(self.dataReceived)
-			Runtime.requestsStack.append(data)
+		except socket.error as error:
+			if error.errno == 10054:
+				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
+				Constants.name), siConstants.siWarning)
+			else:
+				raise error
 		return True
 
 	@staticmethod
@@ -171,28 +195,34 @@ class DefaultStackDataRequestHandler(SocketServer.BaseRequestHandler, NetworkMes
 						break
 		return True
 
-class PythonStackDataRequestHandler(SocketServer.BaseRequestHandler):
+class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
 		allData = []
-		while True:
-			data = self.request.recv(4096)
-			if not data:
-				break
-			
-			self.request.send(self.dataReceived)
-			if self.requestEnd in data:
-				allData.append(data[:data.find(self.requestEnd)])
-				break
-
-			allData.append(data)
-			if len(allData) >=1:
-				tail = allData[-2] + allData[-1]
-				if self.requestEnd in tail:
-					allData[-2] = tail[:tail.find(self.requestEnd)]
-					allData.pop()
+		try:
+			while True:
+				data = self.request.recv(4096)
+				if not data:
 					break
 
+				if self.requestEnd in data:
+					allData.append(data[:data.find(self.requestEnd)])
+					break
+
+				allData.append(data)
+				if len(allData) >=1:
+					tail = allData[-2] + allData[-1]
+					if self.requestEnd in tail:
+						allData[-2] = tail[:tail.find(self.requestEnd)]
+						allData.pop()
+						break
+			self.request.send(self.dataReceived)
+		except socket.error as error:
+			if error.errno == 10054:
+				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
+				Constants.name), siConstants.siWarning)
+			else:
+				raise error
 		Runtime.requestsStack.append("".join(allData))
 		return True
 
@@ -217,7 +247,7 @@ class Constants(object):
 	logo = "pictures/TCPServer_Logo.bmp"
 	defaultAddress = "127.0.0.1"
 	defaultPort = 12288
-	defaultRequestsHandler = DefaultStackDataRequestHandler
+	defaultRequestsHandler = DefaultStackDataRequestsHandler
 	languages = ("VBScript", "JScript", "Python", "PythonScript", "PerlScript")
 
 class Runtime(object):
@@ -230,7 +260,7 @@ class Runtime(object):
 
 class TCPServer(object):
 
-	def __init__(self, address, port, handler=DefaultRequestHandler):
+	def __init__(self, address, port, handler=DefaultRequestsHandler):
 		self.__address = None
 		self.address = address
 		self.__port = None
@@ -335,10 +365,11 @@ def XSILoadPlugin(pluginRegistrar):
 	pluginRegistrar.Major = Constants.majorVersion
 	pluginRegistrar.Minor = Constants.minorVersion
 
+	pluginRegistrar.RegisterEvent("TCPServer_startupEvent", siConstants.siOnStartup)	
 	pluginRegistrar.RegisterCommand("TCPServer_start", "TCPServer_start")
 	pluginRegistrar.RegisterCommand("TCPServer_stop", "TCPServer_stop")
-	pluginRegistrar.RegisterEvent("TCPServer_startupEvent", siConstants.siOnStartup)	
 	pluginRegistrar.RegisterTimerEvent("TCPServer_timerEvent", 250, 0)
+	pluginRegistrar.RegisterMenu(siConstants.siMenuMainApplicationViewsID, "TCPServer_menu")
 
 	pluginRegistrar.RegisterProperty("TCPServer_property");
 
@@ -386,11 +417,24 @@ def TCPServer_timerEvent_OnEvent(context):
 	Runtime.requestsHandler.processData()
 	return False
 
+def TCPServer_menu_Init(context):
+	menu = context.Source;
+	menu.AddCallbackItem("TCPServer Preferences", "TCPServer_menu_Clicked")
+	return True
+
+def TCPServer_menu_Clicked(context):
+	Application.SIAddProp("TCPServer_property", "Scene_Root", siConstants.siDefaultPropagation)
+	Application.InspectObj("TCPServer_property", "", "TCPServer_property")
+	return True
+
 def TCPServer_property_Define(context):
 	property = context.Source
 	property.AddParameter2("Logo_siString", siConstants.siString)
 	property.AddParameter2("Address_siString", siConstants.siString, Runtime.address)
-	property.AddParameter2("Port_siInt", siConstants.siInt4, Runtime.port, 10000, 65536, 10000, 65536)
+	property.AddParameter2("Port_siInt", siConstants.siInt4, Runtime.port, 0, 65535, 0, 65535)
+	property.AddParameter2("RequestsHandlers_siInt",
+							siConstants.siInt4,
+							_getRequestsHandlers().index(Runtime.requestsHandler))
 	return True
 
 def TCPServer_property_DefineLayout(context):
@@ -402,18 +446,19 @@ def TCPServer_property_DefineLayout(context):
 	Logo_siControlBitmap.SetAttribute(siConstants.siUINoLabel, True)
 
 	layout.AddGroup("Server", True, 0)
-
 	layout.AddItem("Address_siString", "Address")
-	layout.AddRow()
-	layout.EndRow()
 	layout.AddItem("Port_siInt", "Port")
+	requestsHandlers = [requestsHandler.__name__ for requestsHandler in _getRequestsHandlers()]
+	layout.AddEnumControl("RequestsHandlers_siInt",
+						list(itertools.chain.from_iterable(zip(requestsHandlers, range(len(requestsHandlers))))),
+						"Requests Handlers", siConstants.siControlCombo)
 	layout.EndGroup()
 
 	layout.AddGroup()
 	layout.AddRow()
 	layout.AddButton("Start_Server_button", "Start TCPServer")
 	layout.AddGroup()
-	layout.EndGroup()
+	layout.EndGroup()	
 	layout.AddButton("Stop_Server_button", "Stop TCPServer")
 	layout.EndRow()
 	layout.EndGroup()
@@ -426,6 +471,7 @@ def TCPServer_property_Address_siString_OnChanged():
 
 	module.Runtime.address = PPG.Address_siString.Value
 	module._storeSettings()
+	module._restartServer()
 	return True
 
 def TCPServer_property_Port_siInt_OnChanged():
@@ -435,6 +481,18 @@ def TCPServer_property_Port_siInt_OnChanged():
 
 	module.Runtime.port = PPG.Port_siInt.Value
 	module._storeSettings()
+	module._restartServer()
+	return True
+
+def TCPServer_property_RequestsHandlers_siInt_OnChanged():
+	module = _getModule()
+	if not module:
+		return
+
+	module.Runtime.requestsHandler = getattr(_getModule(),
+	_getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value].__name__)
+	module._storeSettings()
+	module._restartServer()
 	return True
 
 def TCPServer_property_Start_Server_button_OnClicked():
@@ -457,7 +515,10 @@ def _registerSettingsProperty():
 	if not Application.Preferences.Categories(Constants.settings):
 		property = Application.ActiveSceneRoot.AddCustomProperty(Constants.settings);
 		property.AddParameter2("Address_siString", siConstants.siString, Constants.defaultAddress)
-		property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.defaultPort, 10000, 65536, 10000, 65536)
+		property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.defaultPort, 0, 65535, 0, 65535)
+		property.AddParameter2("RequestsHandler_siInt",
+								siConstants.siInt4,
+								_getRequestsHandlers().index(Constants.defaultRequestsHandler))
 		Application.InstallCustomPreferences("TCPServer_settings_property", "TCPServer_settings_property")
 	return True 
 
@@ -465,12 +526,16 @@ def _storeSettings():
 	if Application.Preferences.Categories(Constants.settings):
 		Application.preferences.SetPreferenceValue("{0}.Address_siString".format(Constants.settings), Runtime.address)
 		Application.preferences.SetPreferenceValue("{0}.Port_siInt".format(Constants.settings), Runtime.port)
+		Application.preferences.SetPreferenceValue(
+		"{0}.RequestsHandler_siInt".format(Constants.settings), _getRequestsHandlers().index(Runtime.requestsHandler))
 	return True 
 
 def _restoreSettings():
 	if Application.Preferences.Categories(Constants.settings):
 		Runtime.address = str(Application.preferences.GetPreferenceValue("{0}.Address_siString".format(Constants.settings)))
 		Runtime.port = int(Application.preferences.GetPreferenceValue("{0}.Port_siInt".format(Constants.settings)))
+		Runtime.requestsHandler = _getRequestsHandlers()[int(Application.preferences.GetPreferenceValue(
+		"{0}.RequestsHandler_siInt".format(Constants.settings)))]
 	return True 
 
 def _getServer(address, port, requestsHandler):
@@ -497,6 +562,13 @@ def _stopServer():
 	Runtime.server and Runtime.server.stop()
 	return True
 
+def _restartServer():
+	if Runtime.server:
+		Runtime.server.online and _stopServer()
+
+	_startServer()
+	return True
+
 def _getModule():
 	# Garbage Collector wizardry to retrieve the actual module object.
 	import gc
@@ -506,3 +578,16 @@ def _getModule():
 
 		if getattr(object, "__uid__") == __uid__:
 			return object
+
+def _getRequestsHandlers():
+	# Module introspection to retrieve the requests handlers classes.
+	module = _getModule()
+	requestsHandlers = []
+	for attribute in dir(module):
+		object = getattr(module, attribute)
+		if not inspect.isclass(object):
+			continue
+		
+		if issubclass(object, SocketServer.BaseRequestHandler):
+			requestsHandlers.append(object)
+	return sorted(requestsHandlers, key=lambda x:x.__name__)
