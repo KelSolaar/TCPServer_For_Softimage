@@ -7,7 +7,7 @@ echo ----------------------------------------------------------------
 rm -rf ./releases/repository/*
 
 #! Change log gathering.
-cp ./releases/Change\ Log.html ./releases/repository/
+cp ./releases/Change_Log.html ./releases/repository/
 
 #! Addon gathering.
 cd ./Addons/
