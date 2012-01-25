@@ -10,8 +10,8 @@
 	| This module has been created as a replacement to
 	`sIBL_GUI_XSI_Server <https://github.com/KelSolaar/sIBL_GUI_XSI_Server>`_ addon for 2 major reasons:
 
-		- The fact that **sIBL_GUI_XSI_Server** was a C# addon needed to be recompiled for each **Autodesk Softimage**
-version
+		- The fact that **sIBL_GUI_XSI_Server** was a C# addon needing to be recompiled for each **Autodesk Softimage**
+version.
 		- The need for a generic socket server that could be easily extended and modified because
 it's written in **Python**.
 
@@ -20,12 +20,14 @@ it's written in **Python**.
 	resulting in application getting blocked while the code is executed.
 	| To prevent this the :class:`TCPServer`class code is executed in a separate thread using the 
 	:mod:`SocketServer`.
-	| One of the major issue encountered while implementing the server was that the client code was getting executed
+	| One of the major issue encountered while implementing the server was because the client code was getting executed
 	into the server thread resulting in random application crashes.
 	| The trick to avoid this has been to create a global requests stack using :class:`collections.deque` class shared
-	between the main application thread and the server thread, then a timer event process the data on a regular interval.
-	| Another issue was the scopes oddities happening with the code and especially the PPG logic. It seems that
-	the PPG logic definitions are called in another scope than the module one.
+	between the main application thread and the server thread, then a timer event poll the data on a regular interval and
+	process it.
+	| Another issue was the scopes oddities happening within the code and especially inside the PPG logic. It seems that
+	the PPG logic definitions are called in another scope than the module one, making it hard to access module objects and
+	annoying if you don't want to expose everything in application commands.
 	| Hopefully, thanks to **Python** introspection it's possible to retrieve the correct module object. For that,
 	a global :data:`__uid__` attribute is defined, then the list of objects handled by the garbage collector is traversed
 	until one with the attribute is found. See :def:`_getModule` definition for more details.
@@ -37,13 +39,25 @@ it's written in **Python**.
 	| Download and install the addon like any other addon. It should be available in the plug-ins manager as
 	**TCPServer_For_Softimage**.
 	| The server should start automatically with **Autodesk Softimage** startup. You can also start it using the
-	**TCPServer_start** command or the **TCPServer_property**.
-	| By default the server is handling string packets of *4096* in size, if the packets are bigger they are split and
-	stacked. They are processed by the \*RequestsHandlers.processData methods.
+	**TCPServer_start** command or the **TCPServer_property** available in the View -> TCPServer -> TCPServer Preferences
+	menu.
 
 **Handlers:**
-	| Different handlers are available as examples:
-	| The :class:`DefaultStackDataRequestsHandler` class handles two types of string formatting:
+	| Different handlers are available:
+	| The :class:`EchoRequestsHandler` class that writes to standard output what the client send and echo it back:
+
+	Example client code:
+
+		>>> import socket
+		>>> connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		>>> connection.connect(("127.0.0.1", 12288))
+		>>> connection.send("Hello World!")
+		12
+		>>> connection.recv(1024)
+		'Hello World!'
+		>>> connection.close()
+
+	The :class:`DefaultStackDataRequestsHandler` class handles two types of string formatting:
 
 		- An existing script file path: "C://MyScript//PythonScript.py" in that case the script would be executed as
 		a **Python** script by the application.
@@ -62,6 +76,29 @@ it's written in **Python**.
 		91
 		>>> connection.close()
 
+	The :class:`LoggingStackDataRequestsHandler` class that verbose what the client send:
+
+	Example client code:
+
+		>>> import socket
+		>>> connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		>>> connection.connect(("127.0.0.1", 12288))
+		>>> connection.send("Hello World!")
+		12
+		>>> connection.close()
+
+	The :class:`PythonStackDataRequestsHandler` class that will aggregate the data the client send until it encounters the
+	:attr:`PythonStackDataRequestsHandler.requestEnd` attribute and then executes the given data as **Python** code.
+
+	Example client code:
+
+		>>> import socket
+		>>> connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		>>> connection.connect(("127.0.0.1", 12288))
+		>>> connection.send("import sys\nprint sys.maxint<!RE>")
+		33
+		>>> connection.close()
+
 **Others:**
 
 """
@@ -75,7 +112,6 @@ import inspect
 import os
 import re
 import socket
-import sys
 import itertools
 import threading
 from win32com.client import constants as siConstants
@@ -92,7 +128,18 @@ __status__ = "Production"
 
 __uid__ = "ab7c34a670c7737f491edfd2939201c4"
 
-__all__ = []
+__all__ = ["ProgrammingError",
+			"AbstractServerError",
+			"ServerOperationError",
+			"EchoRequestsHandler",
+			"LoggingStackDataRequestsHandler",
+			"DefaultStackDataRequestsHandler",
+			"PythonStackDataRequestsHandler",
+			"Constants",
+			"Runtime",
+			"TCPServer",
+			"XSILoadPlugin",
+			"XSIUnloadPlugin"]
 
 #**********************************************************************************************************************
 #***	Module classes and definitions.
@@ -106,51 +153,31 @@ class AbstractServerError(Exception):
 class ServerOperationError(AbstractServerError):
 	pass
 
-class NetworkMessages():
-	dataReceived = "<<!DR>>"
-	requestEnd = "<<!RE>>"
-
-class DefaultRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class EchoRequestsHandler(SocketServer.BaseRequestHandler):
 
 	def handle(self):
-		try:
-			while True:
-				data = self.request.recv(4096)
-				if not data:
-					break
-			
-				sys.stdout.write(data)
-			self.request.send(self.dataReceived)
-			return True
-		except socket.error as error:
-			if error.errno == 10054:
-				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
-				Constants.name), siConstants.siWarning)
-			else:
-				raise error
+		while True:
+			data = self.request.recv(1024)
+			if not data:
+				break
+
+			self.request.send(data)
+		return True
 
 	@staticmethod
 	def processData():
 		pass
 
-class LoggingRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class LoggingStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 
 	def handle(self):
-		try:
-			while True:
-				data = self.request.recv(4096)
-				if not data:
-					break
-			
-				Runtime.requestsStack.append(data)
-			self.request.send(self.dataReceived)
-			return True
-		except socket.error as error:
-			if error.errno == 10054:
-				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
-				Constants.name), siConstants.siWarning)
-			else:
-				raise error
+		while True:
+			data = self.request.recv(1024)
+			if not data:
+				break
+
+			Runtime.requestsStack.append(data)
+		return True
 
 	@staticmethod
 	def processData():
@@ -158,24 +185,16 @@ class LoggingRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 			Application.LogMessage(Runtime.requestsStack.popleft())
 		return True
 
-class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 
 	def handle(self):
-		try:
-			while True:
-				data = self.request.recv(4096)
-				if not data:
-					break
-			
-				Runtime.requestsStack.append(data)
-			self.request.send(self.dataReceived)
-			return True
-		except socket.error as error:
-			if error.errno == 10054:
-				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
-				Constants.name), siConstants.siWarning)
-			else:
-				raise error
+		while True:
+			data = self.request.recv(1024)
+			if not data:
+				break
+
+			Runtime.requestsStack.append(data)
+		return True
 
 	@staticmethod
 	def processData():
@@ -195,36 +214,31 @@ class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMe
 						break
 		return True
 
-class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
+class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler):
+
+	requestEnd = "<!RE>"
 
 	def handle(self):
-		try:
-			allData = []
-			while True:
-				data = self.request.recv(4096)
-				if not data:
+		allData = []
+		while True:
+			data = self.request.recv(1024)
+			if not data:
+				break
+
+			if self.requestEnd in data:
+				allData.append(data[:data.find(self.requestEnd)])
+				break
+
+			allData.append(data)
+			if len(allData) >=1:
+				tail = allData[-2] + allData[-1]
+				if self.requestEnd in tail:
+					allData[-2] = tail[:tail.find(self.requestEnd)]
+					allData.pop()
 					break
 
-				if self.requestEnd in data:
-					allData.append(data[:data.find(self.requestEnd)])
-					break
-
-				allData.append(data)
-				if len(allData) >=1:
-					tail = allData[-2] + allData[-1]
-					if self.requestEnd in tail:
-						allData[-2] = tail[:tail.find(self.requestEnd)]
-						allData.pop()
-						break
-			self.request.send(self.dataReceived)
-			Runtime.requestsStack.append("".join(allData))
-			return True
-		except socket.error as error:
-			if error.errno == 10054:
-				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
-				Constants.name), siConstants.siWarning)
-			else:
-				raise error
+		Runtime.requestsStack.append("".join(allData))
+		return True
 
 	@staticmethod
 	def processData():
@@ -260,7 +274,7 @@ class Runtime(object):
 
 class TCPServer(object):
 
-	def __init__(self, address, port, handler=DefaultRequestsHandler):
+	def __init__(self, address, port, handler=EchoRequestsHandler):
 		self.__address = None
 		self.address = address
 		self.__port = None
@@ -345,11 +359,15 @@ class TCPServer(object):
 			self.__worker.setDaemon(True)
 			self.__worker.start()
 			self.__online = True
+			Application.LogMessage(
+			"{0} | Server successfully started on '{1}' address and '{2}' port using '{3}' requests handler!".format(
+			self.__class__.__name__, self.__address, self.__port, self.__handler.__name__),
+			siConstants.siInfo)
 			return True
 		except socket.error as error:
 			if error.errno == 10048:
 				Application.LogMessage(
-				"{0} | Cannot start '{1}' server, a connection is already opened on port '{2}'!".format(
+				"{0} | Cannot start server, a connection is already opened on port '{2}'!".format(
 				self.__class__.__name__, self, self.__port), siConstants.siWarning)
 			else:
 				raise error
@@ -358,11 +376,11 @@ class TCPServer(object):
 		if not self.__online:
 			raise ServerOperationError("{0} | '{1}' server is not online!".format(self.__class__.__name__, self))
 
-		self.__server.socket.close()
 		self.__server.shutdown()
 		self.__server = None
 		self.__worker = None
 		self.__online = False
+		Application.LogMessage("{0} | Server successfully stopped!".format(self.__class__.__name__), siConstants.siInfo)
 		return True
 	
 def XSILoadPlugin(pluginRegistrar):
