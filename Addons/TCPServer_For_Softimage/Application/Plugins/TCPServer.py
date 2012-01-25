@@ -121,13 +121,13 @@ class DefaultRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 			
 				sys.stdout.write(data)
 			self.request.send(self.dataReceived)
+			return True
 		except socket.error as error:
 			if error.errno == 10054:
 				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
 				Constants.name), siConstants.siWarning)
 			else:
 				raise error
-		return True
 
 	@staticmethod
 	def processData():
@@ -144,13 +144,13 @@ class LoggingRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 			
 				Runtime.requestsStack.append(data)
 			self.request.send(self.dataReceived)
+			return True
 		except socket.error as error:
 			if error.errno == 10054:
 				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
 				Constants.name), siConstants.siWarning)
 			else:
 				raise error
-		return True
 
 	@staticmethod
 	def processData():
@@ -169,13 +169,13 @@ class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMe
 			
 				Runtime.requestsStack.append(data)
 			self.request.send(self.dataReceived)
+			return True
 		except socket.error as error:
 			if error.errno == 10054:
 				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
 				Constants.name), siConstants.siWarning)
 			else:
 				raise error
-		return True
 
 	@staticmethod
 	def processData():
@@ -198,8 +198,8 @@ class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMe
 class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMessages):
 
 	def handle(self):
-		allData = []
 		try:
+			allData = []
 			while True:
 				data = self.request.recv(4096)
 				if not data:
@@ -217,14 +217,14 @@ class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler, NetworkMes
 						allData.pop()
 						break
 			self.request.send(self.dataReceived)
+			Runtime.requestsStack.append("".join(allData))
+			return True
 		except socket.error as error:
 			if error.errno == 10054:
 				Application.LogMessage("{0} | Client closed connection before waiting for server reply!".format(
 				Constants.name), siConstants.siWarning)
 			else:
 				raise error
-		Runtime.requestsStack.append("".join(allData))
-		return True
 
 	@staticmethod
 	def processData():
@@ -339,12 +339,20 @@ class TCPServer(object):
 		if self.__online:
 			raise ServerOperationError("{0} | '{1}' server is already online!".format(self.__class__.__name__, self))
 
-		self.__server = SocketServer.TCPServer((self.__address, self.__port), self.__handler)
-		self.__worker = threading.Thread(target=self.__server.serve_forever)
-		self.__worker.setDaemon(True)
-		self.__worker.start()
-		self.__online = True
-		return True
+		try:
+			self.__server = SocketServer.TCPServer((self.__address, self.__port), self.__handler)
+			self.__worker = threading.Thread(target=self.__server.serve_forever)
+			self.__worker.setDaemon(True)
+			self.__worker.start()
+			self.__online = True
+			return True
+		except socket.error as error:
+			if error.errno == 10048:
+				Application.LogMessage(
+				"{0} | Cannot start '{1}' server, a connection is already opened on port '{2}'!".format(
+				self.__class__.__name__, self, self.__port), siConstants.siWarning)
+			else:
+				raise error
 	
 	def stop(self):
 		if not self.__online:
@@ -369,7 +377,7 @@ def XSILoadPlugin(pluginRegistrar):
 	pluginRegistrar.RegisterCommand("TCPServer_start", "TCPServer_start")
 	pluginRegistrar.RegisterCommand("TCPServer_stop", "TCPServer_stop")
 	pluginRegistrar.RegisterTimerEvent("TCPServer_timerEvent", 250, 0)
-	pluginRegistrar.RegisterMenu(siConstants.siMenuMainApplicationViewsID, "TCPServer_menu")
+	pluginRegistrar.RegisterMenu(siConstants.siMenuMainApplicationViewsID, "TCPServer")
 
 	pluginRegistrar.RegisterProperty("TCPServer_property");
 
@@ -417,12 +425,12 @@ def TCPServer_timerEvent_OnEvent(context):
 	Runtime.requestsHandler.processData()
 	return False
 
-def TCPServer_menu_Init(context):
+def TCPServer_Init(context):
 	menu = context.Source;
-	menu.AddCallbackItem("TCPServer Preferences", "TCPServer_menu_Clicked")
+	menu.AddCallbackItem("TCPServer Preferences", "TCPServer_Preferences_Clicked")
 	return True
 
-def TCPServer_menu_Clicked(context):
+def TCPServer_Preferences_Clicked(context):
 	Application.SIAddProp("TCPServer_property", "Scene_Root", siConstants.siDefaultPropagation)
 	Application.InspectObj("TCPServer_property", "", "TCPServer_property")
 	return True
@@ -544,8 +552,7 @@ def _getServer(address, port, requestsHandler):
 def _startServer():
 	if Runtime.server:
 		if Runtime.server.online:
-			XSIUIToolkit.Msgbox("{0} | The server is already online!".format(Constants.name, Runtime.server),
-								siConstants.siMsgExclamation, "{0} | Warning".format(Constants.name))
+			Application.LogMessage("{0} | The server is already online!".format(Constants.name), siConstants.siWarning)
 			return
 
 	Runtime.server = _getServer(Runtime.address, Runtime.port, Runtime.requestsHandler)
@@ -555,8 +562,7 @@ def _startServer():
 def _stopServer():
 	if Runtime.server:
 		if not Runtime.server.online:
-			XSIUIToolkit.Msgbox("{0} | The server is not online!".format(Constants.name, Runtime.server),
-								siConstants.siMsgExclamation, "{0} | Warning".format(Constants.name))
+			Application.LogMessage("{0} | The server is not online!".format(Constants.name), siConstants.siWarning)
 			return
 
 	Runtime.server and Runtime.server.stop()
