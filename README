@@ -4,7 +4,7 @@
 Extract and Install like an usual Softimage Addon: Softimage -> File - > Addon -> Install Addon.
 
 - Usage -
-TCPServer_For_Softimage menu entry is stored in Model -> Get -> Primitive -> Light. "TCPServer_For_Softimage Properties" launches the TCPServer_For_Softimage property.
+TCPServer_For_Softimage menu entry is stored in View -> TCPServer -> TCPServer Preferences.
 
 - About -
 TCPServer_For_Softimage by Thomas Mansencal - 2012
