@@ -1,8 +1,8 @@
 TCPServer_For_Softimage - 0.1.0 - Alpha
 =======================================
 
-Change Log
-==========
+Changes
+=======
 
 0.1.0 - Alpha
 -------------
