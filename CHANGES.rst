@@ -1,6 +1,8 @@
 TCPServer_For_Softimage - 0.1.0 - Alpha
 =======================================
 
+.. .changes
+
 Changes
 =======
 
@@ -8,6 +10,8 @@ Changes
 -------------
 
 -  Initial Release of TCPServer_For_Softimage.
+
+.. .about
 
 About
 -----
