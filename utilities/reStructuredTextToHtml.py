@@ -37,6 +37,14 @@ __maintainer__ = "Thomas Mansencal"
 __email__ = "thomas.mansencal@gmail.com"
 __status__ = "Production"
 
+__all__ = ["LOGGER",
+		"LOGGING_CONSOLE_HANDLER",
+		"RST2HTML",
+		"CSS_FILE",
+		"TIDY_SETTINGS_FILE",
+		"NORMALIZATION",
+		"reStructuredTextToHtml"]
+
 LOGGER = logging.getLogger(Constants.logger)
 
 LOGGING_CONSOLE_HANDLER = logging.StreamHandler(sys.stdout)
@@ -45,14 +53,14 @@ LOGGER.addHandler(LOGGING_CONSOLE_HANDLER)
 
 core.setVerbosityLevel(3)
 
-RST2HTML = "/Library/Frameworks/Python.framework/Versions/2.7/bin/rst2html.py"
+RST2HTML = "/Users/$USER/Documents/Developement/VirtualEnv/HDRLabs/bin/rst2html.py"
 CSS_FILE = "css/style.css"
 TIDY_SETTINGS_FILE = "tidy/tidySettings.rc"
 
-NORMALIZATION = {"document": "document", }
+NORMALIZATION = {"document": "document"}
 
 #**********************************************************************************************************************
-#***	Main Python code.
+#***	Module classes and definitions.
 #**********************************************************************************************************************
 def reStructuredTextToHtml(fileIn, fileOut):
 	"""
