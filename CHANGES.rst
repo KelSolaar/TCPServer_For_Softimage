@@ -9,7 +9,7 @@ Changes
 0.1.0 - Alpha
 -------------
 
--  Initial Release of TCPServer_For_Softimage.
+-  Initial release of TCPServer_For_Softimage.
 
 .. .about
 
