@@ -2,7 +2,7 @@
 **TCPServer.py**
 
 **Platform:**
-	Windows, Linux.
+	Windows.
 
 **Description:**
 	| This module defines the :class:`TCPServer`class and other helpers objects needed to run a **Python** socket server
