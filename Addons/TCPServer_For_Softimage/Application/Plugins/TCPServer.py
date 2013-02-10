@@ -104,6 +104,11 @@ it's written in **Python**.
 """
 
 #**********************************************************************************************************************
+#***	Future imports.
+#**********************************************************************************************************************
+from __future__ import unicode_literals
+
+#**********************************************************************************************************************
 #***	External imports.
 #**********************************************************************************************************************
 import SocketServer
@@ -296,7 +301,7 @@ class TCPServer(object):
 	@address.setter
 	def address(self, value):
 		if value is not None:
-			assert type(value) in (str, unicode), "'{0}' attribute: '{1}' type is not 'str' or 'unicode'!".format(
+			assert type(value) is unicode, "'{0}' attribute: '{1}' type is not 'unicode'!".format(
 			"address", value)
 		self.__address = value
 
