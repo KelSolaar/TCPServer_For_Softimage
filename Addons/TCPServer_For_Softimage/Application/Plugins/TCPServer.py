@@ -235,7 +235,7 @@ class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 				break
 
 			allData.append(data)
-			if len(allData) >=1:
+			if len(allData) >= 1:
 				tail = allData[-2] + allData[-1]
 				if self.requestEnd in tail:
 					allData[-2] = tail[:tail.find(self.requestEnd)]
@@ -376,7 +376,7 @@ class TCPServer(object):
 				self.__class__.__name__, self, self.__port), siConstants.siWarning)
 			else:
 				raise error
-	
+
 	def stop(self):
 		if not self.__online:
 			raise ServerOperationError("{0} | '{1}' server is not online!".format(self.__class__.__name__, self))
@@ -387,7 +387,7 @@ class TCPServer(object):
 		self.__online = False
 		Application.LogMessage("{0} | Server successfully stopped!".format(self.__class__.__name__), siConstants.siInfo)
 		return True
-	
+
 def XSILoadPlugin(pluginRegistrar):
 	pluginRegistrar.Author = Constants.author
 	pluginRegistrar.Name = Constants.name
@@ -396,7 +396,7 @@ def XSILoadPlugin(pluginRegistrar):
 	pluginRegistrar.Major = Constants.majorVersion
 	pluginRegistrar.Minor = Constants.minorVersion
 
-	pluginRegistrar.RegisterEvent("TCPServer_startupEvent", siConstants.siOnStartup)	
+	pluginRegistrar.RegisterEvent("TCPServer_startupEvent", siConstants.siOnStartup)
 	pluginRegistrar.RegisterCommand("TCPServer_start", "TCPServer_start")
 	pluginRegistrar.RegisterCommand("TCPServer_stop", "TCPServer_stop")
 	pluginRegistrar.RegisterTimerEvent("TCPServer_timerEvent", 250, 0)
@@ -489,7 +489,7 @@ def TCPServer_property_DefineLayout(context):
 	layout.AddRow()
 	layout.AddButton("Start_Server_button", "Start TCPServer")
 	layout.AddGroup()
-	layout.EndGroup()	
+	layout.EndGroup()
 	layout.AddButton("Stop_Server_button", "Stop TCPServer")
 	layout.EndRow()
 	layout.EndGroup()
@@ -551,7 +551,7 @@ def _registerSettingsProperty():
 								siConstants.siInt4,
 								_getRequestsHandlers().index(Constants.defaultRequestsHandler))
 		Application.InstallCustomPreferences("TCPServer_settings_property", "TCPServer_settings_property")
-	return True 
+	return True
 
 def _storeSettings():
 	if Application.Preferences.Categories(Constants.settings):
@@ -559,15 +559,15 @@ def _storeSettings():
 		Application.preferences.SetPreferenceValue("{0}.Port_siInt".format(Constants.settings), Runtime.port)
 		Application.preferences.SetPreferenceValue(
 		"{0}.RequestsHandler_siInt".format(Constants.settings), _getRequestsHandlers().index(Runtime.requestsHandler))
-	return True 
+	return True
 
 def _restoreSettings():
 	if Application.Preferences.Categories(Constants.settings):
-		Runtime.address = str(Application.preferences.GetPreferenceValue("{0}.Address_siString".format(Constants.settings)))
+		Runtime.address = unicode(Application.preferences.GetPreferenceValue("{0}.Address_siString".format(Constants.settings)))
 		Runtime.port = int(Application.preferences.GetPreferenceValue("{0}.Port_siInt".format(Constants.settings)))
 		Runtime.requestsHandler = _getRequestsHandlers()[int(Application.preferences.GetPreferenceValue(
 		"{0}.RequestsHandler_siInt".format(Constants.settings)))]
-	return True 
+	return True
 
 def _getServer(address, port, requestsHandler):
 	return TCPServer(address, port, requestsHandler)
@@ -602,7 +602,7 @@ def _getModule():
 	# Garbage Collector wizardry to retrieve the actual module object.
 	import gc
 	for object in gc.get_objects():
-		if not hasattr(object,"__uid__"):
+		if not hasattr(object, "__uid__"):
 			continue
 
 		if getattr(object, "__uid__") == __uid__:
@@ -616,7 +616,7 @@ def _getRequestsHandlers():
 		object = getattr(module, attribute)
 		if not inspect.isclass(object):
 			continue
-		
+
 		if issubclass(object, SocketServer.BaseRequestHandler):
 			requestsHandlers.append(object)
 	return sorted(requestsHandlers, key=lambda x:x.__name__)
