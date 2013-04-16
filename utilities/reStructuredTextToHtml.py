@@ -13,24 +13,37 @@
 **Others:**
 
 """
+
 #**********************************************************************************************************************
 #***	Future imports.
 #**********************************************************************************************************************
 from __future__ import unicode_literals
 
 #**********************************************************************************************************************
+#***	Encoding manipulations.
+#**********************************************************************************************************************
+import sys
+
+def _setEncoding():
+	"""
+	This definition sets the Application encoding.
+	"""
+
+	reload(sys)
+	sys.setdefaultencoding("utf-8")
+
+_setEncoding()
+
+#**********************************************************************************************************************
 #***	External imports.
 #**********************************************************************************************************************
-import logging
 import os
-import sys
 
 #**********************************************************************************************************************
 #***	Internal imports.
 #**********************************************************************************************************************
-import foundations.core as core
+import foundations.verbose
 from foundations.io import File
-from foundations.globals.constants import Constants
 
 #**********************************************************************************************************************
 #***	Module attributes.
@@ -43,26 +56,22 @@ __email__ = "thomas.mansencal@gmail.com"
 __status__ = "Production"
 
 __all__ = ["LOGGER",
-		"LOGGING_CONSOLE_HANDLER",
 		"RST2HTML",
 		"CSS_FILE",
 		"TIDY_SETTINGS_FILE",
 		"NORMALIZATION",
 		"reStructuredTextToHtml"]
 
-LOGGER = logging.getLogger(Constants.logger)
-
-LOGGING_CONSOLE_HANDLER = logging.StreamHandler(sys.stdout)
-LOGGING_CONSOLE_HANDLER.setFormatter(core.LOGGING_DEFAULT_FORMATTER)
-LOGGER.addHandler(LOGGING_CONSOLE_HANDLER)
-
-core.setVerbosityLevel(3)
+LOGGER = foundations.verbose.installLogger()
 
 RST2HTML = "/Users/$USER/Documents/Development/VirtualEnv/HDRLabs/bin/rst2html.py"
 CSS_FILE = "css/style.css"
 TIDY_SETTINGS_FILE = "tidy/tidySettings.rc"
 
 NORMALIZATION = {"document": "document"}
+
+foundations.verbose.getLoggingConsoleHandler()
+foundations.verbose.setVerbosityLevel(3)
 
 #**********************************************************************************************************************
 #***	Module classes and definitions.
@@ -85,10 +94,11 @@ def reStructuredTextToHtml(fileIn, fileOut):
 	os.system("tidy -config {0} -m '{1}'".format(os.path.join(os.path.dirname(__file__), TIDY_SETTINGS_FILE), fileOut))
 
 	file = File(fileOut)
-	file.read()
+	file.cache()
 	LOGGER.info("{0} | Replacing spaces with tabs!".format(reStructuredTextToHtml.__name__))
 	file.content = [line.replace(" " * 4, "\t") for line in file.content]
 	file.write()
 
 if __name__ == "__main__":
-	reStructuredTextToHtml(sys.argv[1], sys.argv[2])
+	arguments = map(unicode, sys.argv)
+	reStructuredTextToHtml(arguments[1], arguments[2])
