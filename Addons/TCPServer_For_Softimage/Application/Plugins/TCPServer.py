@@ -5,6 +5,9 @@
 	Windows.
 
 **Description:**
+	| **Softimage 2013**: Due to some breaking changes in Softimage 2013, the addon cannot be used anymore the way
+	it was designed	to be: No more hot servers restart / handlers swap. You will have to define the settings
+	you want to use and restart the application.
 	| This module defines the :class:`TCPServer`class and other helpers objects needed to run a **Python** socket server
 	inside **Autodesk Softimage** in a similar way than **Autodesk Maya** command port.
 	| This module has been created as a replacement to
@@ -134,17 +137,17 @@ __status__ = "Production"
 __uid__ = "ab7c34a670c7737f491edfd2939201c4"
 
 __all__ = ["ProgrammingError",
-			"AbstractServerError",
-			"ServerOperationError",
-			"EchoRequestsHandler",
-			"LoggingStackDataRequestsHandler",
-			"DefaultStackDataRequestsHandler",
-			"PythonStackDataRequestsHandler",
-			"Constants",
-			"Runtime",
-			"TCPServer",
-			"XSILoadPlugin",
-			"XSIUnloadPlugin"]
+		"AbstractServerError",
+		"ServerOperationError",
+		"EchoRequestsHandler",
+		"LoggingStackDataRequestsHandler",
+		"DefaultStackDataRequestsHandler",
+		"PythonStackDataRequestsHandler",
+		"Constants",
+		"Runtime",
+		"TCPServer",
+		"XSILoadPlugin",
+		"XSIUnloadPlugin"]
 
 #**********************************************************************************************************************
 #***	Module classes and definitions.
@@ -259,8 +262,8 @@ class Constants(object):
 	author = __author__
 	email = __email__
 	website = "http://www.thomasmansencal.com/"
-	majorVersion = 1
-	minorVersion = 0
+	majorVersion = 0
+	minorVersion = 2
 	patchVersion = 0
 	settings = "TCPServer_settings_property"
 	logo = "pictures/TCPServer_Logo.bmp"
@@ -485,62 +488,72 @@ def TCPServer_property_DefineLayout(context):
 						"Requests Handlers", siConstants.siControlCombo)
 	layout.EndGroup()
 
-	layout.AddGroup()
-	layout.AddRow()
-	layout.AddButton("Start_Server_button", "Start TCPServer")
-	layout.AddGroup()
-	layout.EndGroup()
-	layout.AddButton("Stop_Server_button", "Stop TCPServer")
-	layout.EndRow()
-	layout.EndGroup()
+	# layout.AddGroup()
+	# layout.AddRow()
+	# layout.AddButton("Start_Server_button", "Start TCPServer")
+	# layout.AddGroup()
+	# layout.EndGroup()
+	# layout.AddButton("Stop_Server_button", "Stop TCPServer")
+	# layout.EndRow()
+	# layout.EndGroup()
 	return True
 
 def TCPServer_property_Address_siString_OnChanged():
-	module = _getModule()
-	if not module:
-		return
+	Runtime.address = PPG.Address_siString.Value
+	_storeSettings()
 
-	module.Runtime.address = PPG.Address_siString.Value
-	module._storeSettings()
-	module._restartServer()
+	# module = _getModule()
+	# if not module:
+	# 	return
+
+	# module.Runtime.address = PPG.Address_siString.Value
+	# module._storeSettings()
+	# module._restartServer()
 	return True
 
 def TCPServer_property_Port_siInt_OnChanged():
-	module = _getModule()
-	if not module:
-		return
+	Runtime.port = PPG.Port_siInt.Value
+	_storeSettings()
 
-	module.Runtime.port = PPG.Port_siInt.Value
-	module._storeSettings()
-	module._restartServer()
+	# module = _getModule()
+	# if not module:
+	# 	return
+
+	# module.Runtime.port = PPG.Port_siInt.Value
+	# module._storeSettings()
+	# module._restartServer()
 	return True
 
 def TCPServer_property_RequestsHandlers_siInt_OnChanged():
-	module = _getModule()
-	if not module:
-		return
+	Runtime.requestsHandler = _getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value]
+	_storeSettings()
 
-	module.Runtime.requestsHandler = getattr(_getModule(),
-	_getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value].__name__)
-	module._storeSettings()
-	module._restartServer()
+	# module = _getModule()
+	# if not module:
+	# 	return
+
+	# module.Runtime.requestsHandler = getattr(_getModule(),
+	# _getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value].__name__)
+	# module._storeSettings()
+	# module._restartServer()
 	return True
 
 def TCPServer_property_Start_Server_button_OnClicked():
-	module = _getModule()
-	if not module:
-		return
+	# module = _getModule()
+	# if not module:
+	# 	return
 
-	module._startServer()
+	# module._startServer()
 	return True
 
 def TCPServer_property_Stop_Server_button_OnClicked():
-	module = _getModule()
-	if not module:
-		return
+	# module = _getModule()
+	# if not module:
+	# 	return
 
-	module._stopServer()
+	# module._stopServer()
 	return True
+
 
 def _registerSettingsProperty():
 	if not Application.Preferences.Categories(Constants.settings):
@@ -609,14 +622,24 @@ def _getModule():
 			return object
 
 def _getRequestsHandlers():
-	# Module introspection to retrieve the requests handlers classes.
-	module = _getModule()
 	requestsHandlers = []
-	for attribute in dir(module):
-		object = getattr(module, attribute)
+	for object in sorted(globals().values()):
 		if not inspect.isclass(object):
 			continue
 
 		if issubclass(object, SocketServer.BaseRequestHandler):
 			requestsHandlers.append(object)
+
 	return sorted(requestsHandlers, key=lambda x:x.__name__)
+
+	# Module introspection to retrieve the requests handlers classes.
+	# module = _getModule()
+	# requestsHandlers = []
+	# for attribute in dir(module):
+	# 	object = getattr(module, attribute)
+	# 	if not inspect.isclass(object):
+	# 		continue
+
+	# 	if issubclass(object, SocketServer.BaseRequestHandler):
+	# 		requestsHandlers.append(object)
+	# return sorted(requestsHandlers, key=lambda x:x.__name__)
