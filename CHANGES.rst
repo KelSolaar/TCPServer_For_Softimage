@@ -1,4 +1,4 @@
-TCPServer_For_Softimage - 0.1.0 - Alpha
+TCPServer_For_Softimage - 0.2.0 - Alpha
 =======================================
 
 .. .changes
@@ -6,10 +6,15 @@ TCPServer_For_Softimage - 0.1.0 - Alpha
 Changes
 =======
 
+0.2.0 - Alpha
+-------------
+
+-  Remove hot swap / restart capabilities because of breaking changes in **Softimage 2013**.
+
 0.1.0 - Alpha
 -------------
 
--  Initial release of TCPServer_For_Softimage.
+-  Initial release of **TCPServer_For_Softimage**.
 
 .. .about
 
