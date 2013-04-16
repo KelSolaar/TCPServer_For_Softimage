@@ -25,12 +25,6 @@ it's written in **Python**.
 	| The trick to avoid this has been to create a global requests stack using :class:`collections.deque` class shared
 	between the main application thread and the server thread, then a timer event poll the data on a regular interval and
 	process it.
-	| Another issue was the scopes oddities happening within the code and especially inside the PPG logic. It seems that
-	the PPG logic definitions are called in another scope than the module one, making it hard to access module objects and
-	annoying if you don't want to expose everything in application commands.
-	| Hopefully, thanks to **Python** introspection it's possible to retrieve the correct module object. For that,
-	a global :data:`__uid__` attribute is defined, then the list of objects handled by the garbage collector is traversed
-	until one with the attribute is found. See :def:`_getModule` definition for more details.
 	| An alternate design using the plugin **UserData** attribute has been tested but never managed to wrap correcly
 	the :class:`collections.deque` class inside a COM object.
 
@@ -100,7 +94,17 @@ it's written in **Python**.
 		>>> connection.close()
 
 **Others:**
-
+	| Well, it's very sad to see that once again Autodesk has fixed stuff and broken others in a way the module will not
+	work properly.
+	| What's going on is not exactly clear but it looks like the module is getting loaded two times	with something ugly
+	happening in between.
+	| When Softimage starts, the first :class:`TCPServer` class instance is stored in the :attr:`Runtime.server` class
+	attribute, the problem is that when accessed later, that class attribute is empty, the class itself has not the same
+	memory id anymore.
+	| As a result the first server instance is lost and locks the socket. Trying to shut it down by traversing the garbage
+	collector didn't worked. It means that the port is dedicated to the startup requests handler until the end of
+	session.
+	| After a bit more tests, it looks like there are more problems than the ones described above.
 """
 
 #**********************************************************************************************************************
@@ -125,7 +129,7 @@ from win32com.client import constants as siConstants
 #***	Module attributes.
 #**********************************************************************************************************************
 __author__ = "Thomas Mansencal"
-__copyright__ = "Copyright (C) 2008 - 2013 - Thomas Mansencal"
+__copyright__ = "Copyright (C) 2012 - 2013 - Thomas Mansencal"
 __license__ = "GPL V3.0 - http://www.gnu.org/licenses/"
 __maintainer__ = "Thomas Mansencal"
 __email__ = "thomas.mansencal@gmail.com"
@@ -443,8 +447,8 @@ def TCPServer_stop_Execute():
 	return True
 
 def TCPServer_timerEvent_OnEvent(context):
-	# Application.LogMessage("{0} | 'TCPServer_timerEvent' called!".format(
-	# Constants.name), siConstants.siVerbose)
+	# Application.LogMessage("{0} | 'TCPServer_timerEvent' called!".format(Constants.name),
+	# siConstants.siVerbose)
 	Runtime.requestsHandler.processData()
 	return False
 
@@ -496,50 +500,29 @@ def TCPServer_property_DefineLayout(context):
 	return True
 
 def TCPServer_property_Address_siString_OnChanged():
-	module = _getModule()
-	if not module:
-		return
-
-	module.Runtime.address = PPG.Address_siString.Value
-	module._storeSettings()
-	module._restartServer()
+	Runtime.address = PPG.Address_siString.Value
+	_storeSettings()
+	_restartServer()
 	return True
 
 def TCPServer_property_Port_siInt_OnChanged():
-	module = _getModule()
-	if not module:
-		return
-
-	module.Runtime.port = PPG.Port_siInt.Value
-	module._storeSettings()
-	module._restartServer()
+	Runtime.port = PPG.Port_siInt.Value
+	_storeSettings()
+	_restartServer()
 	return True
 
 def TCPServer_property_RequestsHandlers_siInt_OnChanged():
-	module = _getModule()
-	if not module:
-		return
-
-	module.Runtime.requestsHandler = getattr(_getModule(),
-	_getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value].__name__)
-	module._storeSettings()
-	module._restartServer()
+	Runtime.requestsHandler = _getRequestsHandlers()[PPG.RequestsHandlers_siInt.Value]
+	_storeSettings()
+	_restartServer()
 	return True
 
 def TCPServer_property_Start_Server_button_OnClicked():
-	module = _getModule()
-	if not module:
-		return
-
-	module._startServer()
+	_startServer()
 	return True
 
 def TCPServer_property_Stop_Server_button_OnClicked():
-	module = _getModule()
-	if not module:
-		return
-
-	module._stopServer()
+	_stopServer()
 	return True
 
 def _registerSettingsProperty():
@@ -576,7 +559,7 @@ def _startServer():
 	if Runtime.server:
 		if Runtime.server.online:
 			Application.LogMessage("{0} | The server is already online!".format(Constants.name), siConstants.siWarning)
-			return
+			return False
 
 	Runtime.server = _getServer(Runtime.address, Runtime.port, Runtime.requestsHandler)
 	Runtime.server.start()
@@ -586,9 +569,11 @@ def _stopServer():
 	if Runtime.server:
 		if not Runtime.server.online:
 			Application.LogMessage("{0} | The server is not online!".format(Constants.name), siConstants.siWarning)
-			return
+			return False
 
-	Runtime.server and Runtime.server.stop()
+	if Runtime.server:
+		Runtime.server.stop()
+		Runtime.server = None
 	return True
 
 def _restartServer():
@@ -598,25 +583,13 @@ def _restartServer():
 	_startServer()
 	return True
 
-def _getModule():
-	# Garbage Collector wizardry to retrieve the actual module object.
-	import gc
-	for object in gc.get_objects():
-		if not hasattr(object, "__uid__"):
-			continue
-
-		if getattr(object, "__uid__") == __uid__:
-			return object
-
 def _getRequestsHandlers():
-	# Module introspection to retrieve the requests handlers classes.
-	module = _getModule()
 	requestsHandlers = []
-	for attribute in dir(module):
-		object = getattr(module, attribute)
+	for object in sorted(globals().values()):
 		if not inspect.isclass(object):
 			continue
 
 		if issubclass(object, SocketServer.BaseRequestHandler):
 			requestsHandlers.append(object)
+
 	return sorted(requestsHandlers, key=lambda x:x.__name__)
