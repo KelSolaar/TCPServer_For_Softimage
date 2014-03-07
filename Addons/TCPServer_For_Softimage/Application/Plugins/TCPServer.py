@@ -8,7 +8,7 @@
 	| **Softimage 2013**: Due to some breaking changes in Softimage 2013, the addon cannot be used anymore the way
 	it was designed	to be: No more hot servers restart / handlers swap. You will have to define the settings
 	you want to use and restart the application.
-	| This module defines the :class:`TCPServer`class and other helpers objects needed to run a **Python** socket server
+	| Defines the :class:`TCPServer`class and other helpers objects needed to run a **Python** socket server
 	inside **Autodesk Softimage** in a similar way than **Autodesk Maya** command port.
 	| This module has been created as a replacement to
 	`sIBL_GUI_XSI_Server <https://github.com/KelSolaar/sIBL_GUI_XSI_Server>`_ addon for 2 major reasons:
