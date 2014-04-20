@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-**reStructuredTextToHtml.py**
+**reStructuredText_to_html.py**
 
 **Platform:**
 	Windows, Linux, Mac Os X.
@@ -48,26 +48,26 @@ __all__ = ["LOGGER",
 		   "CSS_FILE",
 		   "TIDY_SETTINGS_FILE",
 		   "RST2HTML",
-		   "reStructuredTextToHtml",
-		   "getCommandLineArguments",
+		   "reStructuredText_to_html",
+		   "get_command_line_arguments",
 		   "main"]
 
-LOGGER = foundations.verbose.installLogger()
+LOGGER = foundations.verbose.install_logger()
 
 RESOURCES_DIRECTORY = os.path.join(os.path.dirname(__file__))
 
 CSS_FILE = os.path.join(RESOURCES_DIRECTORY, "css", "style.css")
-TIDY_SETTINGS_FILE = os.path.join(RESOURCES_DIRECTORY, "tidy", "tidySettings.rc")
+TIDY_SETTINGS_FILE = os.path.join(RESOURCES_DIRECTORY, "tidy", "tidy_settings.rc")
 
 RST2HTML = "rst2html.py"
 
-foundations.verbose.getLoggingConsoleHandler()
-foundations.verbose.setVerbosityLevel(3)
+foundations.verbose.get_logging_console_handler()
+foundations.verbose.set_verbosity_level(3)
 
 #**********************************************************************************************************************
 #***	Module classes and definitions.
 #**********************************************************************************************************************
-def reStructuredTextToHtml(input, output, cssFile):
+def reStructuredText_to_html(input, output, css_file):
 	"""
 	Outputs a reStructuredText file to html.
 
@@ -75,15 +75,15 @@ def reStructuredTextToHtml(input, output, cssFile):
 	:type input: unicode
 	:param output: Output html file.
 	:type output: unicode
-	:param cssFile: Css file.
-	:type cssFile: unicode
+	:param css_file: Css file.
+	:type css_file: unicode
 	:return: Definition success.
 	:rtype: bool
 	"""
 
-	LOGGER.info("{0} | Converting '{1}' reStructuredText file to html!".format(reStructuredTextToHtml.__name__, input))
+	LOGGER.info("{0} | Converting '{1}' reStructuredText file to html!".format(reStructuredText_to_html.__name__, input))
 	os.system("{0} --stylesheet-path='{1}' '{2}' > '{3}'".format(RST2HTML,
-																 os.path.join(os.path.dirname(__file__), cssFile),
+																 os.path.join(os.path.dirname(__file__), css_file),
 																 input,
 																 output))
 
@@ -92,13 +92,13 @@ def reStructuredTextToHtml(input, output, cssFile):
 
 	file = File(output)
 	file.cache()
-	LOGGER.info("{0} | Replacing spaces with tabs!".format(reStructuredTextToHtml.__name__))
+	LOGGER.info("{0} | Replacing spaces with tabs!".format(reStructuredText_to_html.__name__))
 	file.content = [line.replace(" " * 4, "\t") for line in file.content]
 	file.write()
 
 	return True
 
-def getCommandLineArguments():
+def get_command_line_arguments():
 	"""
 	Retrieves command line arguments.
 
@@ -126,9 +126,9 @@ def getCommandLineArguments():
 						help="'Output html file.'")
 
 	parser.add_argument("-c",
-						"--cssFile",
+						"--css_file",
 						type=unicode,
-						dest="cssFile",
+						dest="css_file",
 						help="'Css file.'")
 
 	if len(sys.argv) == 1:
@@ -137,7 +137,7 @@ def getCommandLineArguments():
 
 	return parser.parse_args()
 
-@foundations.decorators.systemExit
+@foundations.decorators.system_exit
 def main():
 	"""
 	Starts the Application.
@@ -146,11 +146,11 @@ def main():
 	:rtype: bool
 	"""
 
-	args = getCommandLineArguments()
-	args.cssFile = args.cssFile if foundations.common.pathExists(args.cssFile) else CSS_FILE
-	return reStructuredTextToHtml(args.input,
+	args = get_command_line_arguments()
+	args.css_file = args.css_file if foundations.common.path_exists(args.css_file) else CSS_FILE
+	return reStructuredText_to_html(args.input,
 								  args.output,
-								  args.cssFile)
+								  args.css_file)
 
 if __name__ == "__main__":
 	main()
