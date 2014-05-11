@@ -128,26 +128,30 @@ __status__ = "Production"
 __uid__ = "ab7c34a670c7737f491edfd2939201c4"
 
 __all__ = ["ProgrammingError",
-        "AbstractServerError",
-        "ServerOperationError",
-        "EchoRequestsHandler",
-        "LoggingStackDataRequestsHandler",
-        "DefaultStackDataRequestsHandler",
-        "PythonStackDataRequestsHandler",
-        "Constants",
-        "Runtime",
-        "TCPServer",
-        "XSILoadPlugin",
-        "XSIUnloadPlugin"]
+           "AbstractServerError",
+           "ServerOperationError",
+           "EchoRequestsHandler",
+           "LoggingStackDataRequestsHandler",
+           "DefaultStackDataRequestsHandler",
+           "PythonStackDataRequestsHandler",
+           "Constants",
+           "Runtime",
+           "TCPServer",
+           "XSILoadPlugin",
+           "XSIUnloadPlugin"]
+
 
 class ProgrammingError(Exception):
     pass
 
+
 class AbstractServerError(Exception):
     pass
 
+
 class ServerOperationError(AbstractServerError):
     pass
+
 
 class EchoRequestsHandler(SocketServer.BaseRequestHandler):
 
@@ -163,6 +167,7 @@ class EchoRequestsHandler(SocketServer.BaseRequestHandler):
     @staticmethod
     def process_data():
         pass
+
 
 class LoggingStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 
@@ -180,6 +185,7 @@ class LoggingStackDataRequestsHandler(SocketServer.BaseRequestHandler):
         while Runtime.requests_stack:
             Application.LogMessage(Runtime.requests_stack.popleft())
         return True
+
 
 class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 
@@ -199,19 +205,19 @@ class DefaultStackDataRequestsHandler(SocketServer.BaseRequestHandler):
             if os.path.exists(data):
                 value = Application.ExecuteScript(data)
                 Application.LogMessage("{0} | Request return value: '{1}'.".format(
-                Constants.name, value), siConstants.siVerbose)
+                    Constants.name, value), siConstants.siVerbose)
             else:
                 for language in Constants.languages:
                     match = re.match(r"\s*(?P<language>{0})\s*\|(?P<code>.*)".format(language), data)
                     if match:
                         value = Application.ExecuteScriptCode(match.group("code"), match.group("language"))
                         Application.LogMessage("{0} | Request return value: '{1}'.".format(
-                        Constants.name, value), siConstants.siVerbose)
+                            Constants.name, value), siConstants.siVerbose)
                         break
         return True
 
-class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler):
 
+class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler):
     request_end = "<!RE>"
 
     def handle(self):
@@ -241,11 +247,11 @@ class PythonStackDataRequestsHandler(SocketServer.BaseRequestHandler):
         while Runtime.requests_stack:
             value = Application.ExecuteScriptCode(Runtime.requests_stack.popleft(), "Python")
             Application.LogMessage("{0} | Request return value: '{1}'.".format(
-            Constants.name, value), siConstants.siVerbose)
+                Constants.name, value), siConstants.siVerbose)
         return True
 
-class Constants(object):
 
+class Constants(object):
     name = "TCPServer"
     author = __author__
     email = __email__
@@ -260,13 +266,14 @@ class Constants(object):
     default_requests_handler = DefaultStackDataRequestsHandler
     languages = ("VBScript", "JScript", "Python", "PythonScript", "PerlScript")
 
-class Runtime(object):
 
+class Runtime(object):
     server = None
     address = Constants.default_address
     port = Constants.default_port
     requests_handler = Constants.default_requests_handler
     requests_stack = collections.deque()
+
 
 class TCPServer(object):
 
@@ -290,7 +297,7 @@ class TCPServer(object):
     def address(self, value):
         if value is not None:
             assert type(value) is unicode, "'{0}' attribute: '{1}' type is not 'unicode'!".format(
-            "address", value)
+                "address", value)
         self.__address = value
 
     @address.deleter
@@ -305,7 +312,7 @@ class TCPServer(object):
     def port(self, value):
         if value is not None:
             assert type(value) is int, "'{0}' attribute: '{1}' type is not 'int'!".format(
-            "port", value)
+                "port", value)
         self.__port = value
 
     @port.deleter
@@ -320,7 +327,7 @@ class TCPServer(object):
     def handler(self, value):
         if value is not None:
             assert issubclass(value, SocketServer.BaseRequestHandler), \
-            "'{0}' attribute: '{1}' is not 'SocketServer.BaseRequestHandler' subclass!".format("handler", value)
+                "'{0}' attribute: '{1}' is not 'SocketServer.BaseRequestHandler' subclass!".format("handler", value)
         self.__handler = value
 
     @handler.deleter
@@ -350,15 +357,15 @@ class TCPServer(object):
             self.__worker.start()
             self.__online = True
             Application.LogMessage(
-            "{0} | Server successfully started on '{1}' address and '{2}' port using '{3}' requests handler!".format(
-            self.__class__.__name__, self.__address, self.__port, self.__handler.__name__),
-            siConstants.siInfo)
+                "{0} | Server successfully started on '{1}' address and '{2}' port using '{3}' requests handler!".format(
+                    self.__class__.__name__, self.__address, self.__port, self.__handler.__name__),
+                siConstants.siInfo)
             return True
         except socket.error as error:
             if error.errno == 10048:
                 Application.LogMessage(
-                "{0} | Cannot start server, a connection is already opened on port '{2}'!".format(
-                self.__class__.__name__, self, self.__port), siConstants.siWarning)
+                    "{0} | Cannot start server, a connection is already opened on port '{2}'!".format(
+                        self.__class__.__name__, self, self.__port), siConstants.siWarning)
             else:
                 raise error
 
@@ -370,8 +377,10 @@ class TCPServer(object):
         self.__server = None
         self.__worker = None
         self.__online = False
-        Application.LogMessage("{0} | Server successfully stopped!".format(self.__class__.__name__), siConstants.siInfo)
+        Application.LogMessage("{0} | Server successfully stopped!".format(
+            self.__class__.__name__), siConstants.siInfo)
         return True
+
 
 def XSILoadPlugin(plugin_registrar):
     plugin_registrar.Author = Constants.author
@@ -387,45 +396,52 @@ def XSILoadPlugin(plugin_registrar):
     plugin_registrar.RegisterTimerEvent("TCPServer_timerEvent", 250, 0)
     plugin_registrar.RegisterMenu(siConstants.siMenuMainApplicationViewsID, "TCPServer")
 
-    plugin_registrar.RegisterProperty("TCPServer_property");
+    plugin_registrar.RegisterProperty("TCPServer_property")
 
     Application.LogMessage("'{0}' has been loaded!".format(plugin_registrar.Name))
     return True
+
 
 def XSIUnloadPlugin(plugin_registrar):
     _stop_server()
     Application.LogMessage("'{0}' has been unloaded!".format(plugin_registrar.Name))
     return True
 
+
 def TCPServer_startupEvent_OnEvent(context):
     Application.LogMessage("{0} | 'TCPServer_startupEvent_OnEvent' called!".format(
-    Constants.name), siConstants.siVerbose)
+        Constants.name), siConstants.siVerbose)
     _register_settings_property()
     _restore_settings()
     _start_server()
     return True
 
+
 def TCPServer_start_Init(context):
     Application.LogMessage("{0} | 'TCPServer_start_Init' called!".format(
-    Constants.name), siConstants.siVerbose)
+        Constants.name), siConstants.siVerbose)
     return True
+
 
 def TCPServer_start_Execute():
     Application.LogMessage("{0} | 'TCPServer_start_Execute' called!".format(
-    Constants.name), siConstants.siVerbose)
+        Constants.name), siConstants.siVerbose)
     _start_server()
     return True
 
+
 def TCPServer_stop_Init(context):
     Application.LogMessage("{0} | 'TCPServer_stop_Init' called!".format(
-    Constants.name), siConstants.siVerbose)
+        Constants.name), siConstants.siVerbose)
     return True
+
 
 def TCPServer_stop_Execute():
     Application.LogMessage("{0} | 'TCPServer_stop_Execute' called!".format(
-    Constants.name), siConstants.siVerbose)
+        Constants.name), siConstants.siVerbose)
     _stop_server()
     return True
+
 
 def TCPServer_timerEvent_OnEvent(context):
     # Application.LogMessage("{0} | 'TCPServer_timerEvent' called!".format(
@@ -433,15 +449,18 @@ def TCPServer_timerEvent_OnEvent(context):
     Runtime.requests_handler.process_data()
     return False
 
+
 def TCPServer_Init(context):
-    menu = context.Source;
+    menu = context.Source
     menu.AddCallbackItem("TCPServer Preferences", "TCPServer_Preferences_Clicked")
     return True
+
 
 def TCPServer_Preferences_Clicked(context):
     Application.SIAddProp("TCPServer_property", "Scene_Root", siConstants.siDefaultPropagation)
     Application.InspectObj("TCPServer_property", "", "TCPServer_property")
     return True
+
 
 def TCPServer_property_Define(context):
     property = context.Source
@@ -449,9 +468,10 @@ def TCPServer_property_Define(context):
     property.AddParameter2("Address_siString", siConstants.siString, Runtime.address)
     property.AddParameter2("Port_siInt", siConstants.siInt4, Runtime.port, 0, 65535, 0, 65535)
     property.AddParameter2("RequestsHandlers_siInt",
-                            siConstants.siInt4,
-                            _get_requests_handlers().index(Runtime.requests_handler))
+                           siConstants.siInt4,
+                           _get_requests_handlers().index(Runtime.requests_handler))
     return True
+
 
 def TCPServer_property_DefineLayout(context):
     layout = context.Source
@@ -466,8 +486,8 @@ def TCPServer_property_DefineLayout(context):
     layout.AddItem("Port_siInt", "Port")
     requests_handlers = [requestsHandler.__name__ for requestsHandler in _get_requests_handlers()]
     layout.AddEnumControl("RequestsHandlers_siInt",
-                        list(itertools.chain.from_iterable(zip(requests_handlers, range(len(requests_handlers))))),
-                        "Requests Handlers", siConstants.siControlCombo)
+                          list(itertools.chain.from_iterable(zip(requests_handlers, range(len(requests_handlers))))),
+                          "Requests Handlers", siConstants.siControlCombo)
     layout.EndGroup()
 
     # layout.AddGroup()
@@ -479,6 +499,7 @@ def TCPServer_property_DefineLayout(context):
     # layout.EndRow()
     # layout.EndGroup()
     return True
+
 
 def TCPServer_property_Address_siString_OnChanged():
     Runtime.address = PPG.Address_siString.Value
@@ -493,6 +514,7 @@ def TCPServer_property_Address_siString_OnChanged():
     # module._restart_server()
     return True
 
+
 def TCPServer_property_Port_siInt_OnChanged():
     Runtime.port = PPG.Port_siInt.Value
     _store_settings()
@@ -505,6 +527,7 @@ def TCPServer_property_Port_siInt_OnChanged():
     # module._store_settings()
     # module._restart_server()
     return True
+
 
 def TCPServer_property_RequestsHandlers_siInt_OnChanged():
     Runtime.requests_handler = _get_requests_handlers()[PPG.RequestsHandlers_siInt.Value]
@@ -520,6 +543,7 @@ def TCPServer_property_RequestsHandlers_siInt_OnChanged():
     # module._restart_server()
     return True
 
+
 def TCPServer_property_Start_Server_button_OnClicked():
     # module = _get_module()
     # if not module:
@@ -527,6 +551,7 @@ def TCPServer_property_Start_Server_button_OnClicked():
 
     # module._start_server()
     return True
+
 
 def TCPServer_property_Stop_Server_button_OnClicked():
     # module = _get_module()
@@ -539,33 +564,39 @@ def TCPServer_property_Stop_Server_button_OnClicked():
 
 def _register_settings_property():
     if not Application.Preferences.Categories(Constants.settings):
-        property = Application.ActiveSceneRoot.AddCustomProperty(Constants.settings);
+        property = Application.ActiveSceneRoot.AddCustomProperty(Constants.settings)
         property.AddParameter2("Address_siString", siConstants.siString, Constants.default_address)
         property.AddParameter2("Port_siInt", siConstants.siInt4, Constants.default_port, 0, 65535, 0, 65535)
         property.AddParameter2("RequestsHandler_siInt",
-                                siConstants.siInt4,
-                                _get_requests_handlers().index(Constants.default_requests_handler))
+                               siConstants.siInt4,
+                               _get_requests_handlers().index(Constants.default_requests_handler))
         Application.InstallCustomPreferences("TCPServer_settings_property", "TCPServer_settings_property")
     return True
+
 
 def _store_settings():
     if Application.Preferences.Categories(Constants.settings):
         Application.preferences.SetPreferenceValue("{0}.Address_siString".format(Constants.settings), Runtime.address)
         Application.preferences.SetPreferenceValue("{0}.Port_siInt".format(Constants.settings), Runtime.port)
         Application.preferences.SetPreferenceValue(
-        "{0}.RequestsHandler_siInt".format(Constants.settings), _get_requests_handlers().index(Runtime.requests_handler))
+            "{0}.RequestsHandler_siInt".format(Constants.settings),
+            _get_requests_handlers().index(Runtime.requests_handler))
     return True
+
 
 def _restore_settings():
     if Application.Preferences.Categories(Constants.settings):
-        Runtime.address = unicode(Application.preferences.GetPreferenceValue("{0}.Address_siString".format(Constants.settings)))
+        Runtime.address = unicode(Application.preferences.GetPreferenceValue(
+            "{0}.Address_siString".format(Constants.settings)))
         Runtime.port = int(Application.preferences.GetPreferenceValue("{0}.Port_siInt".format(Constants.settings)))
         Runtime.requests_handler = _get_requests_handlers()[int(Application.preferences.GetPreferenceValue(
-        "{0}.RequestsHandler_siInt".format(Constants.settings)))]
+            "{0}.RequestsHandler_siInt".format(Constants.settings)))]
     return True
+
 
 def _get_server(address, port, requests_handler):
     return TCPServer(address, port, requests_handler)
+
 
 def _start_server():
     if Runtime.server:
@@ -577,6 +608,7 @@ def _start_server():
     Runtime.server.start()
     return True
 
+
 def _stop_server():
     if Runtime.server:
         if not Runtime.server.online:
@@ -586,6 +618,7 @@ def _stop_server():
     Runtime.server and Runtime.server.stop()
     return True
 
+
 def _restart_server():
     if Runtime.server:
         Runtime.server.online and _stop_server()
@@ -593,15 +626,18 @@ def _restart_server():
     _start_server()
     return True
 
+
 def _get_module():
     # Garbage Collector wizardry to retrieve the actual module object.
     import gc
+
     for object in gc.get_objects():
         if not hasattr(object, "__uid__"):
             continue
 
         if getattr(object, "__uid__") == __uid__:
             return object
+
 
 def _get_requests_handlers():
     requests_handlers = []
@@ -612,7 +648,7 @@ def _get_requests_handlers():
         if issubclass(object, SocketServer.BaseRequestHandler):
             requests_handlers.append(object)
 
-    return sorted(requests_handlers, key=lambda x:x.__name__)
+    return sorted(requests_handlers, key=lambda x: x.__name__)
 
     # Module introspection to retrieve the requests handlers classes.
     # module = _get_module()

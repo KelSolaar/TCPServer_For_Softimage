@@ -52,6 +52,7 @@ RST2HTML = "rst2html.py"
 foundations.verbose.get_logging_console_handler()
 foundations.verbose.set_verbosity_level(3)
 
+
 def reStructuredText_to_html(input, output, css_file):
     """
     Outputs a reStructuredText file to html.
@@ -66,7 +67,8 @@ def reStructuredText_to_html(input, output, css_file):
     :rtype: bool
     """
 
-    LOGGER.info("{0} | Converting '{1}' reStructuredText file to html!".format(reStructuredText_to_html.__name__, input))
+    LOGGER.info(
+        "{0} | Converting '{1}' reStructuredText file to html!".format(reStructuredText_to_html.__name__, input))
     os.system("{0} --stylesheet-path='{1}' '{2}' > '{3}'".format(RST2HTML,
                                                                  os.path.join(os.path.dirname(__file__), css_file),
                                                                  input,
@@ -82,6 +84,7 @@ def reStructuredText_to_html(input, output, css_file):
     file.write()
 
     return True
+
 
 def get_command_line_arguments():
     """
@@ -122,6 +125,7 @@ def get_command_line_arguments():
 
     return parser.parse_args()
 
+
 @foundations.decorators.system_exit
 def main():
     """
@@ -134,8 +138,9 @@ def main():
     args = get_command_line_arguments()
     args.css_file = args.css_file if foundations.common.path_exists(args.css_file) else CSS_FILE
     return reStructuredText_to_html(args.input,
-                                  args.output,
-                                  args.css_file)
+                                    args.output,
+                                    args.css_file)
+
 
 if __name__ == "__main__":
     main()
